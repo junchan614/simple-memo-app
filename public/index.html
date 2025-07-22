@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>シンプルメモアプリ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📝 シンプルメモアプリ</h1>
+            <p>データベース基礎学習プロジェクト</p>
+        </header>
+
+        <main>
+            <!-- メモ作成フォーム -->
+            <section class="memo-form">
+                <h2>新しいメモを作成</h2>
+                <form id="memoForm">
+                    <div class="form-group">
+                        <label for="title">タイトル</label>
+                        <input type="text" id="title" name="title" placeholder="メモのタイトルを入力" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="content">内容</label>
+                        <textarea id="content" name="content" placeholder="メモの内容を入力" rows="5"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </form>
+            </section>
+
+            <!-- メモ一覧 -->
+            <section class="memo-list">
+                <h2>保存されたメモ</h2>
+                <div id="memoContainer" class="memo-container">
+                    <!-- メモがここに動的に追加されます -->
+                    <p class="no-memos">まだメモがありません。上のフォームから作成してください。</p>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Express.js + SQLite で構築</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
