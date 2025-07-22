@@ -4,9 +4,15 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// ルーターのインポート
+const memosRouter = require('./routes/memos');
+
 // ミドルウェア設定
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// API ルーター設定
+app.use('/api/memos', memosRouter);
 
 // 基本ルート
 app.get('/', (req, res) => {

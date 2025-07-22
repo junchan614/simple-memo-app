@@ -19,7 +19,7 @@ function setupFormHandler() {
     });
 }
 
-// メモ作成
+// メモ作成・更新
 async function createMemo() {
     const title = titleInput.value.trim();
     const content = contentInput.value.trim();
@@ -33,30 +33,63 @@ async function createMemo() {
     try {
         showMessage('保存中...', 'loading');
 
-        // 現在はローカルストレージに保存（後でAPI連携に変更）
-        const memo = {
-            id: Date.now(),
-            title: title,
-            content: content,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-        };
+        // 編集モードかどうかチェック
+        const editingId = memoForm.dataset.editingId;
+        let response, successMessage;
 
-        // ローカルストレージから既存のメモを取得
-        const existingMemos = JSON.parse(localStorage.getItem('memos') || '[]');
-        existingMemos.unshift(memo); // 新しいメモを先頭に追加
-        localStorage.setItem('memos', JSON.stringify(existingMemos));
+        if (editingId) {
+            // 更新処理
+            response = await fetch(`/api/memos/${editingId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    title: title,
+                    content: content
+                })
+            });
+            successMessage = 'メモを更新しました！';
+        } else {
+            // 新規作成処理
+            response = await fetch('/api/memos', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    title: title,
+                    content: content
+                })
+            });
+            successMessage = 'メモを作成しました！';
+        }
 
-        // フォームをリセット
-        memoForm.reset();
-        
-        // メモ一覧を再表示
-        loadMemos();
-        
-        showMessage('メモを保存しました！', 'success');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            // フォームをリセット
+            memoForm.reset();
+            delete memoForm.dataset.editingId; // 編集モード解除
+            
+            // メモ一覧を再表示
+            await loadMemos();
+            
+            showMessage(successMessage, 'success');
+        } else {
+            throw new Error(result.error || '保存に失敗しました');
+        }
     } catch (error) {
-        console.error('メモ作成エラー:', error);
-        showMessage('メモの保存に失敗しました', 'error');
+        console.error('メモ作成/更新エラー:', error);
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            showMessage('サーバーに接続できません', 'error');
+        } else {
+            showMessage('メモの保存に失敗しました', 'error');
+        }
     }
 }
 
@@ -65,16 +98,31 @@ async function loadMemos() {
     try {
         showMessage('読み込み中...', 'loading');
 
-        // 現在はローカルストレージから取得（後でAPI連携に変更）
-        const memos = JSON.parse(localStorage.getItem('memos') || '[]');
-        
-        displayMemos(memos);
+        // API経由でメモ一覧取得
+        const response = await fetch('/api/memos');
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            displayMemos(result.data);
+        } else {
+            throw new Error(result.error || '読み込みに失敗しました');
+        }
         
         // ローディングメッセージを削除
         clearMessages();
     } catch (error) {
         console.error('メモ読み込みエラー:', error);
-        showMessage('メモの読み込みに失敗しました', 'error');
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            showMessage('サーバーに接続できません', 'error');
+        } else {
+            showMessage('メモの読み込みに失敗しました', 'error');
+        }
+        displayMemos([]); // エラー時は空の配列を表示
     }
 }
 
@@ -125,28 +173,44 @@ function createMemoElement(memo) {
 // メモ編集
 async function editMemo(id) {
     try {
-        const memos = JSON.parse(localStorage.getItem('memos') || '[]');
-        const memo = memos.find(m => m.id == id);
-        
-        if (!memo) {
-            showMessage('メモが見つかりません', 'error');
+        // API経由で特定のメモを取得
+        const response = await fetch(`/api/memos/${id}`);
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                showMessage('メモが見つかりません', 'error');
+            } else {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             return;
         }
 
-        // フォームに既存の値を設定
-        titleInput.value = memo.title;
-        contentInput.value = memo.content || '';
+        const result = await response.json();
 
-        // 一旦メモを削除（更新の代わり）
-        await deleteMemo(id, false);
+        if (result.success) {
+            const memo = result.data;
+            
+            // フォームに既存の値を設定
+            titleInput.value = memo.title;
+            contentInput.value = memo.content || '';
 
-        // フォームにフォーカス
-        titleInput.focus();
-        
-        showMessage('編集モードです。内容を変更して保存してください', 'success');
+            // 編集対象のIDを記録（更新時に使用）
+            memoForm.dataset.editingId = id;
+
+            // フォームにフォーカス
+            titleInput.focus();
+            
+            showMessage('編集モードです。内容を変更して保存してください', 'success');
+        } else {
+            throw new Error(result.error || '編集に失敗しました');
+        }
     } catch (error) {
         console.error('メモ編集エラー:', error);
-        showMessage('メモの編集に失敗しました', 'error');
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            showMessage('サーバーに接続できません', 'error');
+        } else {
+            showMessage('メモの編集に失敗しました', 'error');
+        }
     }
 }
 
@@ -157,19 +221,39 @@ async function deleteMemo(id, showConfirm = true) {
             return;
         }
 
-        const memos = JSON.parse(localStorage.getItem('memos') || '[]');
-        const filteredMemos = memos.filter(m => m.id != id);
-        localStorage.setItem('memos', JSON.stringify(filteredMemos));
+        // API経由でメモ削除
+        const response = await fetch(`/api/memos/${id}`, {
+            method: 'DELETE'
+        });
 
-        // メモ一覧を再表示
-        loadMemos();
-        
-        if (showConfirm) {
-            showMessage('メモを削除しました', 'success');
+        if (!response.ok) {
+            if (response.status === 404) {
+                showMessage('メモが見つかりません', 'error');
+            } else {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return;
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            // メモ一覧を再表示
+            await loadMemos();
+            
+            if (showConfirm) {
+                showMessage('メモを削除しました', 'success');
+            }
+        } else {
+            throw new Error(result.error || '削除に失敗しました');
         }
     } catch (error) {
         console.error('メモ削除エラー:', error);
-        showMessage('メモの削除に失敗しました', 'error');
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            showMessage('サーバーに接続できません', 'error');
+        } else {
+            showMessage('メモの削除に失敗しました', 'error');
+        }
     }
 }
 
